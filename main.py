@@ -1,150 +1,187 @@
-import flet as ft
+from kivy.app import App
+from kivy.uix.gridlayout import GridLayout
+from kivy.uix.button import Button
+from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.label import Label
+from kivy.uix.popup import Popup
+import math
 
-# Check for win conditions
-def check_winner(b):
-    lines = [
-        (0, 1, 2), (3, 4, 5), (6, 7, 8),  # Rows
-        (0, 3, 6), (1, 4, 7), (2, 5, 8),  # Columns
-        (0, 4, 8), (2, 4, 6)             # Diagonals
+
+board = [" " for _ in range(9)]
+
+PLAYER = "X"
+ROBOT = "O"
+
+
+def winner(b):
+    wins = [
+        (0,1,2),(3,4,5),(6,7,8),
+        (0,3,6),(1,4,7),(2,5,8),
+        (0,4,8),(2,4,6)
     ]
-    for x, y, z in lines:
-        if b[x] and b[x] == b[y] == b[z]:
-            return b[x]
-    if "" not in b:
-        return "Tie"
+
+    for a,b1,c in wins:
+        if b[a] == b[b1] == b[c] != " ":
+            return b[a]
+
+    if " " not in b:
+        return "Draw"
+
     return None
 
-# Minimax algorithm for the Pro Bot (AI is "O", Human is "X")
-def minimax(b, is_maximizing):
-    winner = check_winner(b)
-    if winner == "O": return 1
-    if winner == "X": return -1
-    if winner == "Tie": return 0
 
-    if is_maximizing:
-        best_score = -1000
+def minimax(b, max_player):
+
+    r = winner(b)
+
+    if r == ROBOT:
+        return 1
+    if r == PLAYER:
+        return -1
+    if r == "Draw":
+        return 0
+
+    if max_player:
+        best = -999
+
         for i in range(9):
-            if b[i] == "":
-                b[i] = "O"
-                score = minimax(b, False)
-                b[i] = ""
-                best_score = max(score, best_score)
-        return best_score
+            if b[i] == " ":
+                b[i] = ROBOT
+                best = max(best, minimax(b, False))
+                b[i] = " "
+
+        return best
+
     else:
-        best_score = 1000
-        for i in range(9):
-            if b[i] == "":
-                b[i] = "X"
-                score = minimax(b, True)
-                b[i] = ""
-                best_score = min(score, best_score)
-        return best_score
+        best = 999
 
-def find_best_move(b):
-    best_score = -1000
-    move = -1
+        for i in range(9):
+            if b[i] == " ":
+                b[i] = PLAYER
+                best = min(best, minimax(b, True))
+                b[i] = " "
+
+        return best
+
+
+def robot_play():
+
+    best = -999
+    move = 0
+
     for i in range(9):
-        if b[i] == "":
-            b[i] = "O"
-            score = minimax(b, False)
-            b[i] = ""
-            if score > best_score:
-                best_score = score
+        if board[i] == " ":
+            board[i] = ROBOT
+            score = minimax(board, False)
+            board[i] = " "
+
+            if score > best:
+                best = score
                 move = i
+
+    board[move] = ROBOT
     return move
 
-def main(page: ft.Page):
-    page.title = "Tic Tac Toe - Vs Pro Bot"
-    page.vertical_alignment = ft.MainAxisAlignment.CENTER
-    page.horizontal_alignment = ft.CrossAxisAlignment.CENTER
-    page.window_width = 400
-    page.window_height = 500
 
-    board = [""] * 9
-    status_text = ft.Text("Your turn (X)", size=16, weight=ft.FontWeight.BOLD)
-    grid_buttons = []
 
-    def reset_game(e):
-        nonlocal board
-        board = [""] * 9
-        status_text.value = "Your turn (X)"
-        for btn in grid_buttons:
-            btn.text = ""
-            btn.disabled = False
-        page.update()
+class TicTacToe(App):
 
-    def make_ai_move():
-        move = find_best_move(board)
-        if move != -1:
-            board[move] = "O"
-            grid_buttons[move].text = "O"
-            grid_buttons[move].disabled = True
+    def build(self):
 
-        res = check_winner(board)
-        if res:
-            end_game(res)
-        else:
-            status_text.value = "Your turn (X)"
-            page.update()
+        self.buttons = []
 
-    def end_game(res):
-        for btn in grid_buttons:
-            btn.disabled = True
-        if res == "Tie":
-            status_text.value = "It's a Tie!"
-        else:
-            status_text.value = f"Player {res} Wins!"
-        page.update()
-
-    def handle_click(e):
-        idx = int(e.control.data)
-        if board[idx] == "" and status_text.value.startswith("Your"):
-            board[idx] = "X"
-            e.control.text = "X"
-            e.control.disabled = True
-            
-            res = check_winner(board)
-            if res:
-                end_game(res)
-            else:
-                status_text.value = "Bot thinking..."
-                page.update()
-                page.run_task(delayed_ai_move)
-
-    async def delayed_ai_move():
-        import asyncio
-        await asyncio.sleep(0.3)
-        make_ai_move()
-
-    for i in range(9):
-        btn = ft.ElevatedButton(
-            text="",
-            data=i,
-            width=90,
-            height=90,
-            on_click=handle_click,
-            style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=8))
+        layout = BoxLayout(
+            orientation="vertical"
         )
-        grid_buttons.append(btn)
 
-    grid = ft.GridView(
-        runs_count=3,
-        max_extent=100,
-        spacing=5,
-        run_spacing=5,
-        width=300,
-        height=300,
-        controls=grid_buttons
-    )
-
-    reset_btn = ft.ElevatedButton("Restart Game", on_click=reset_game)
-
-    page.add(
-        ft.Column(
-            [status_text, grid, reset_btn],
-            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-            alignment=ft.MainAxisAlignment.CENTER
+        self.label = Label(
+            text="You: X   Robot: O",
+            font_size=25
         )
-    )
 
-ft.app(target=main)
+        layout.add_widget(self.label)
+
+
+        grid = GridLayout(
+            cols=3
+        )
+
+        for i in range(9):
+
+            b = Button(
+                font_size=50
+            )
+
+            b.bind(
+                on_press=lambda x, i=i:self.play(i)
+            )
+
+            self.buttons.append(b)
+            grid.add_widget(b)
+
+
+        layout.add_widget(grid)
+
+
+        reset = Button(
+            text="Restart",
+            size_hint_y=.2
+        )
+
+        reset.bind(
+            on_press=self.reset
+        )
+
+        layout.add_widget(reset)
+
+        return layout
+
+
+    def play(self,index):
+
+        if board[index] == " ":
+
+            board[index]="X"
+            self.buttons[index].text="X"
+
+
+            if self.check():
+                return
+
+
+            move=robot_play()
+
+            self.buttons[move].text="O"
+
+
+            self.check()
+
+
+    def check(self):
+
+        r=winner(board)
+
+        if r:
+
+            Popup(
+                title="Game",
+                content=Label(text=r+" wins"),
+                size_hint=(.6,.3)
+            ).open()
+
+            self.reset(None)
+
+            return True
+
+
+        return False
+
+
+    def reset(self,button):
+
+        for i in range(9):
+            board[i]=" "
+            self.buttons[i].text=""
+
+
+TicTacToe().run()
